@@ -52,35 +52,25 @@ const int LED = 8;
 boolean ledON = 1;
 
 void print_hash(uint8_t *arr, uint8_t len) {
-  // char buffer[len];
-
-  Serial.println("+ Hash +");
+  Serial.print("Hash: ");
   for (int i = 0; i < len; i++) {
 
     if (arr[i] < 0x10) { // Check if the value is less than 16 (0x10)
       Serial.print('0'); // Print a leading '0' if needed
     }
     Serial.print(arr[i], HEX); // Print in hexadecimal format
-    // sprintf(format, "0x%%.%dX", 8);
-    // sprintf(buffer, "0x%%.%dX", arr[i]); 
-    // Serial.print(buffer);
     Serial.print(" "); // Add a space for separation
-
-    if(i > 0 && i % 8 == 0) {
-      Serial.println(); // Newline at the end
-    }
   }
   Serial.println(); // Newline at the end
-  Serial.println("- Hash -");
 }
 
 void print_array(uint8_t *arr, uint8_t len) {
-  Serial.println("+ Hash +");
+  Serial.println("HS");
   for (int i = 0; i < len; i++) {
     Serial.print(arr[i]);
   }
   Serial.println(); // Newline at the end
-  Serial.println("- Hash -");
+  Serial.println("HE");
 }
 
 void sha256_HMAC(Hash *hash, const char *key, const unsigned char *data)
@@ -92,100 +82,50 @@ void sha256_HMAC(Hash *hash, const char *key, const unsigned char *data)
   hash->finalizeHMAC(key, strlen(key), result, sizeof(result));
 
   // If the first test passed, then try the all-in-one function too.
-  if (!memcmp(result, hash, HASH_SIZE)) {
-    memset(result, 0xAA, sizeof(result));
-    hmac<SHA256>(result, HASH_SIZE, key, strlen(key), data, strlen((const char*)data));
-  }
+  // if (!memcmp(result, hash, HASH_SIZE)) {
+  //   memset(result, 0xAA, sizeof(result));
+  //   hmac<SHA256>(result, HASH_SIZE, key, strlen(key), data, strlen((const char*)data));
+  // }
 
   print_hash(result, HASH_SIZE);
 }
 
-void my_sha256(Hash *hash, const unsigned char *data)
+void my_sha256(Hash *hash, const char *data)
 {
   uint8_t result[HASH_SIZE];
-  // size_t size = strlen(test->data);
-  // size_t posn, len;
-
   hash->reset();
   hash->update(data, strlen((const char*)data));
   hash->finalize(result, sizeof(result));
-  // print_hash(result, HASH_SIZE);
-  print_array(result, HASH_SIZE);
-  // for (posn = 0; posn < size; posn += inc) {
-  //     len = size - posn;
-  //     if (len > inc)
-  //         len = inc;
-  //     hash->update(test->data + posn, len);
-  // }
+  print_hash(result, HASH_SIZE);
 }
 
 void setup() {
-  SERIAL_PORT_MONITOR.begin(115200);
+  // Default Config is 8 data bits, No Parity bits, 1 Stop bit (8N1)
+  Serial.begin(115200);
   pinMode(LED, OUTPUT);
 
   while (CAN_OK != CAN.begin(CAN_500KBPS)) {             // init can bus : baudrate = 500k
-    SERIAL_PORT_MONITOR.println("CAN init fail, retry...");
+    Serial.println("CAN init fail, retry...");
     delay(100);
   }
-  SERIAL_PORT_MONITOR.println("CAN init ok!");
-  SERIAL_PORT_MONITOR.println("");
-  SERIAL_PORT_MONITOR.println("");
-  SERIAL_PORT_MONITOR.println("");
-  SERIAL_PORT_MONITOR.println("");
-  SERIAL_PORT_MONITOR.println("");
-  SERIAL_PORT_MONITOR.println("");
-
+  Serial.println("CAN init ok!");
   
   // const unsigned char *data = "This is a test string";
   // sha256_HMAC(&sha256, key, data);
 }
 
-
 void loop() {
-  unsigned char len = 0;
-  unsigned char buf[8];
   
-
-  // if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
-  //     CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
-  //     unsigned long canId = CAN.getCanId();
-
-  //     // SERIAL_PORT_MONITOR.println("-----------------------------");
-  //     // SERIAL_PORT_MONITOR.print("get data from ID: 0x");
-  //     SERIAL_PORT_MONITOR.println(canId, HEX);
-
-  //     for (int i = 0; i < len; i++) { // print the data
-  //         SERIAL_PORT_MONITOR.print(buf[i]);
-  //         SERIAL_PORT_MONITOR.print("\t");
-  //         if (ledON && i == 0) {
-
-  //             digitalWrite(LED, buf[i]);
-  //             ledON = 0;
-  //             delay(500);
-  //         } else if ((!(ledON)) && i == 4) {
-
-  //             digitalWrite(LED, buf[i]);
-  //             ledON = 1;
-  //         }
-  //     }
-  //     SERIAL_PORT_MONITOR.println();
-  //     // Serial.print("Original Data: ");
-  //     // Serial.println(data);
-  //     sha256_HMAC(&sha256, key, buf);
-  // }
-
-  Serial.println("+ Data +");
-  // Serial.println("This is a test string");
-  Serial.println("test");
-  Serial.println("- Data -");
-  
-  // const unsigned char *data = "This is a test string";
-  const unsigned char *data = "test";
+  const char *data = "This is a test string";
+  // const char *data = "test";
   my_sha256(&sha256, data);
   // sha256_HMAC(&sha256, key, data);
 
-  // Reduce loop rate, wait 1sec
-  delay(1000);
+  Serial.print("Data: ");
+  Serial.println(data);
+
+  // Reduce loop rate, wait 5sec
+  delay(5000);
 }
 
 //END FILE

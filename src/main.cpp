@@ -14,6 +14,7 @@ const int CAN_INT_PIN = 2;
 #ifdef CAN_2515
 #include "mcp2515_can.h"
 mcp2515_can CAN(SPI_CS_PIN); // Set CS pin
+#define MAX_DATA_SIZE 8
 #endif
 
 #define HASH_SIZE 32
@@ -50,6 +51,11 @@ byte buffer[128];
 
 const int LED = 8;
 boolean ledON = 1;
+
+uint32_t id;
+uint8_t  type; // bit0: ext, bit1: rtr
+uint8_t  len;
+byte cdata[MAX_DATA_SIZE] = {0};
 
 void print_hash(uint8_t *arr, uint8_t len) {
   Serial.print("Hash: ");
@@ -114,18 +120,85 @@ void setup() {
   // sha256_HMAC(&sha256, key, data);
 }
 
+
+
 void loop() {
   
-  const char *data = "This is a test string";
-  // const char *data = "test";
-  my_sha256(&sha256, data);
-  // sha256_HMAC(&sha256, key, data);
+  // const char *data = "This is a test string";
+  // // const char *data = "test";
+  // my_sha256(&sha256, data);
+  // // sha256_HMAC(&sha256, key, data);
 
-  Serial.print("Data: ");
-  Serial.println(data);
+  // Serial.print("Data: ");
+  // Serial.println(data);
 
-  // Reduce loop rate, wait 5sec
-  delay(5000);
+  // // Reduce loop rate, wait 5sec
+  // delay(5000);
+
+
+  // check if data coming
+  // if (CAN_MSGAVAIL != CAN.checkReceive()) {
+  //     return;
+  // }
+
+  // char prbuf[32 + MAX_DATA_SIZE * 3];
+  // int i, n;
+
+  // unsigned long t = millis();
+  // // read data, len: data length, buf: data buf
+  // CAN.readMsgBuf(&len, cdata);
+
+  // id = CAN.getCanId();
+  // type = (CAN.isExtendedFrame() << 0) |
+  //         (CAN.isRemoteRequest() << 1);
+  // /*
+  //   * MCP2515(or this driver) could not handle properly
+  //   * the data carried by remote frame 
+  //   */
+
+  // n = sprintf(prbuf, "%04lu.%03d ", t / 1000, int(t % 1000));
+  // /* Displayed type:
+  //   *
+  //   * 0x00: standard data frame
+  //   * 0x02: extended data frame
+  //   * 0x30: standard remote frame
+  //   * 0x32: extended remote frame
+  //   */
+  // static const byte type2[] = {0x00, 0x02, 0x30, 0x32};
+  // n += sprintf(prbuf + n, "RX: [%08lX](%02X) ", (unsigned long)id, type2[type]);
+  // // n += sprintf(prbuf, "RX: [%08lX](%02X) ", id, type);
+
+  // for (i = 0; i < len; i++) {
+  //     n += sprintf(prbuf + n, "%02X ", cdata[i]);
+  // }
+  // SERIAL_PORT_MONITOR.println(prbuf);
+
+  unsigned char len = 0;
+  unsigned char buf[8];
+
+  if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
+    CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
+
+    unsigned long canId = CAN.getCanId();
+
+    SERIAL_PORT_MONITOR.println("-----------------------------");
+    SERIAL_PORT_MONITOR.println("get data from ID: 0x");
+    SERIAL_PORT_MONITOR.println(canId, HEX);
+
+    for (int i = 0; i < len; i++) { // print the data
+      SERIAL_PORT_MONITOR.print(buf[i]);
+      SERIAL_PORT_MONITOR.print("\t");
+      if (ledON && i == 0) {
+        digitalWrite(LED, buf[i]);
+        ledON = 0;
+        delay(500);
+      } else if ((!(ledON)) && i == 4) {
+        digitalWrite(LED, buf[i]);
+        ledON = 1;
+      }
+    }
+    SERIAL_PORT_MONITOR.println();
+  }
 }
 
 //END FILE

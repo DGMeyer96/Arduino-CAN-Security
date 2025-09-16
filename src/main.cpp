@@ -52,10 +52,15 @@ byte buffer[128];
 const int LED = 8;
 boolean ledON = 1;
 
-uint32_t id;
-uint8_t  type; // bit0: ext, bit1: rtr
-uint8_t  len;
-byte cdata[MAX_DATA_SIZE] = {0};
+void printHex(int num, int precision) {
+  char tmp[16];
+  char format[128];
+
+  sprintf(format, "%%.%dX", precision);
+
+  sprintf(tmp, format, num);
+  Serial.print(tmp);
+}
 
 void print_hash(uint8_t *arr, uint8_t len) {
   Serial.print("Hash: ");
@@ -68,6 +73,37 @@ void print_hash(uint8_t *arr, uint8_t len) {
     Serial.print(" "); // Add a space for separation
   }
   Serial.println(); // Newline at the end
+}
+void print_hash(const int *arr, uint8_t len) {
+  Serial.print("Hash: ");
+  for (int i = 0; i < len; i++) {
+
+    if (arr[i] < 0x10) { // Check if the value is less than 16 (0x10)
+      Serial.print('0'); // Print a leading '0' if needed
+    }
+    Serial.print(arr[i], HEX); // Print in hexadecimal format
+    Serial.print(" "); // Add a space for separation
+  }
+  Serial.println(); // Newline at the end
+}
+
+void print_can(unsigned long canId, String data, uint8_t len) {
+  Serial.print("CanId: ");
+  Serial.println(canId, HEX);
+  Serial.print("Data: ");
+  Serial.print(data);
+  Serial.println();
+}
+void print_can(unsigned long canId, uint8_t data[], uint8_t len) {
+  Serial.print("CanId: ");
+  Serial.println(canId, HEX);
+  Serial.print("Data: ");
+  for (int i = 0; i < len; i++) {
+    // printHex(buf[i], 2);
+    Serial.print(data[i]);
+    // Serial.print(" ");
+  } 
+  Serial.println();
 }
 
 void print_array(uint8_t *arr, uint8_t len) {
@@ -96,18 +132,26 @@ void sha256_HMAC(Hash *hash, const char *key, const unsigned char *data)
   print_hash(result, HASH_SIZE);
 }
 
-void my_sha256(Hash *hash, const char *data)
+void my_sha256(Hash *hash, const uint8_t *data, uint8_t len)
 {
   uint8_t result[HASH_SIZE];
   hash->reset();
-  hash->update(data, strlen((const char*)data));
+  hash->update(data, len);
+  hash->finalize(result, sizeof(result));
+  print_hash(result, HASH_SIZE);
+}
+void my_sha256(Hash *hash, String data, uint8_t len)
+{
+  uint8_t result[HASH_SIZE];
+  hash->reset();
+  hash->update(data.c_str(), strlen(data.c_str()));
   hash->finalize(result, sizeof(result));
   print_hash(result, HASH_SIZE);
 }
 
 void setup() {
   // Default Config is 8 data bits, No Parity bits, 1 Stop bit (8N1)
-  Serial.begin(115200);
+  Serial.begin(250000);
   pinMode(LED, OUTPUT);
 
   while (CAN_OK != CAN.begin(CAN_500KBPS)) {             // init can bus : baudrate = 500k
@@ -119,8 +163,6 @@ void setup() {
   // const unsigned char *data = "This is a test string";
   // sha256_HMAC(&sha256, key, data);
 }
-
-
 
 void loop() {
   
@@ -135,70 +177,26 @@ void loop() {
   // // Reduce loop rate, wait 5sec
   // delay(5000);
 
-
-  // check if data coming
-  // if (CAN_MSGAVAIL != CAN.checkReceive()) {
-  //     return;
-  // }
-
-  // char prbuf[32 + MAX_DATA_SIZE * 3];
-  // int i, n;
-
-  // unsigned long t = millis();
-  // // read data, len: data length, buf: data buf
-  // CAN.readMsgBuf(&len, cdata);
-
-  // id = CAN.getCanId();
-  // type = (CAN.isExtendedFrame() << 0) |
-  //         (CAN.isRemoteRequest() << 1);
-  // /*
-  //   * MCP2515(or this driver) could not handle properly
-  //   * the data carried by remote frame 
-  //   */
-
-  // n = sprintf(prbuf, "%04lu.%03d ", t / 1000, int(t % 1000));
-  // /* Displayed type:
-  //   *
-  //   * 0x00: standard data frame
-  //   * 0x02: extended data frame
-  //   * 0x30: standard remote frame
-  //   * 0x32: extended remote frame
-  //   */
-  // static const byte type2[] = {0x00, 0x02, 0x30, 0x32};
-  // n += sprintf(prbuf + n, "RX: [%08lX](%02X) ", (unsigned long)id, type2[type]);
-  // // n += sprintf(prbuf, "RX: [%08lX](%02X) ", id, type);
-
-  // for (i = 0; i < len; i++) {
-  //     n += sprintf(prbuf + n, "%02X ", cdata[i]);
-  // }
-  // SERIAL_PORT_MONITOR.println(prbuf);
-
-  unsigned char len = 0;
-  unsigned char buf[8];
+  uint8_t len = 0;
+  uint8_t buf[8];
 
   if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
     CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
-
     unsigned long canId = CAN.getCanId();
 
-    SERIAL_PORT_MONITOR.println("-----------------------------");
-    SERIAL_PORT_MONITOR.println("get data from ID: 0x");
-    SERIAL_PORT_MONITOR.println(canId, HEX);
+    // Serial.println("-------------------");
+    // my_sha256(&sha256, buf, len);
+    // print_can(canId, buf, len);
 
-    for (int i = 0; i < len; i++) { // print the data
-      SERIAL_PORT_MONITOR.print(buf[i]);
-      SERIAL_PORT_MONITOR.print("\t");
-      if (ledON && i == 0) {
-        digitalWrite(LED, buf[i]);
-        ledON = 0;
-        delay(500);
-      } else if ((!(ledON)) && i == 4) {
-        digitalWrite(LED, buf[i]);
-        ledON = 1;
-      }
+    String converted;
+    for(int i = 0; i < len; i++) {
+      converted += String(buf[i], HEX);
     }
-    SERIAL_PORT_MONITOR.println();
+    my_sha256(&sha256, converted, len);
+    print_can(canId, converted, len);
   }
+  // Apply 1sec throttling to make it easier to read
+  delay(1000);
 }
 
 //END FILE

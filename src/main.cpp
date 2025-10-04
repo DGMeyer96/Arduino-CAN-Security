@@ -22,7 +22,16 @@ mcp2515_can CAN(SPI_CS_PIN); // Set CS pin
 
 SHA256 sha256;
 byte buffer[128];
-// const char *key = "Flightcacse2025";
+const char *key = "Flightcase2025";
+
+char test_key[] = "Flightcase2025";
+// char test_key[] = "46 6C 69 67 68 74 63 61 73 65 32 30 32 35";
+unsigned char* key_byte_array = (unsigned char*)test_key;
+
+unsigned char test_key_2[] = { 0x46, 0x6C, 0x69, 0x67, 0x68, 0x74, 0x63, 0x61, 0x73, 0x65, 0x32, 0x30, 0x32, 0x35 };
+unsigned char test_key_3[] = { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+
+// uint8_t key_byte_arry[8] = 
 // const char *key = "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABFwAAAAdzc2gtcn
 // NhAAAAAwEAAQAAAQEA4QDqpS9IX8PvWkNNHaWsFJ4ZFgCy/zt2FLR4Ld3sTaBCzEfg47Ej
 // cG7tRJjGkb71tj1OPN0aDymSZ2KIjZ47eLBZihO1qezkfGRs7Xa0+nYABaZyDzvUwvyP4K
@@ -51,6 +60,8 @@ byte buffer[128];
 
 const int LED = 8;
 boolean ledON = 1;
+
+const String hashMode = "HMAC";
 
 void printHex(int num, int precision) {
   char tmp[16];
@@ -131,6 +142,22 @@ void sha256_HMAC(Hash *hash, const char *key, const unsigned char *data)
 
   print_hash(result, HASH_SIZE);
 }
+void my_sha256_HMAC(Hash *hash, const uint8_t *key, String data)
+{
+  uint8_t result[HASH_SIZE];
+  hash->resetHMAC(key, 8);
+  hash->update(data.c_str(), strlen(data.c_str()));
+  hash->finalizeHMAC(key, 8, result, sizeof(result));
+  print_hash(result, HASH_SIZE);
+}
+void my_sha256_HMAC(Hash *hash, const char *key, String data)
+{
+  uint8_t result[HASH_SIZE];
+  hash->resetHMAC(key, strlen(key));
+  hash->update(data.c_str(), strlen(data.c_str()));
+  hash->finalizeHMAC(key, strlen(key), result, sizeof(result));
+  print_hash(result, HASH_SIZE);
+}
 
 void my_sha256(Hash *hash, const uint8_t *data, uint8_t len)
 {
@@ -140,7 +167,7 @@ void my_sha256(Hash *hash, const uint8_t *data, uint8_t len)
   hash->finalize(result, sizeof(result));
   print_hash(result, HASH_SIZE);
 }
-void my_sha256(Hash *hash, String data, uint8_t len)
+void my_sha256(Hash *hash, String data)
 {
   uint8_t result[HASH_SIZE];
   hash->reset();
@@ -180,6 +207,17 @@ void loop() {
   uint8_t len = 0;
   uint8_t buf[8];
 
+  // char test_key[] = "Flightcase2025";
+  // unsigned char* key_byte_array = (unsigned char*)test_key;
+  // Serial.println(test_key);
+  // Serial.print("Byte values: ");
+  // for (size_t i = 0; i < strlen(test_key); i++) {
+  //   Serial.print(key_byte_array[i], HEX);
+  //   Serial.print(" ");
+  // }
+  // Serial.println();
+
+
   if (CAN_MSGAVAIL == CAN.checkReceive()) {         // check if data coming
     CAN.readMsgBuf(&len, buf);    // read data,  len: data length, buf: data buf
     unsigned long canId = CAN.getCanId();
@@ -188,12 +226,24 @@ void loop() {
     // my_sha256(&sha256, buf, len);
     // print_can(canId, buf, len);
 
+    // Convert the buffer from unigned char to String (needed to match Android)
     String converted;
     for(int i = 0; i < len; i++) {
       converted += String(buf[i], HEX);
     }
-    my_sha256(&sha256, converted, len);
+
+    if(hashMode == "SHA256") {
+      my_sha256(&sha256, converted);
+    } else if (hashMode == "HMAC") {
+      my_sha256_HMAC(&sha256, key, converted);
+    } else {
+      Serial.println("ARDUINO INVALID HASH MODE!!!");
+    }
     print_can(canId, converted, len);
+
+    // 
+    // Serial.print("Key Length: ");
+    // Serial.println(strlen(key));
   }
   // Apply 1sec throttling to make it easier to read
   delay(1000);

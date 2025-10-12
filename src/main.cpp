@@ -3,6 +3,8 @@
 #include <string.h>
 #include <Crypto.h>
 #include <SPI.h>
+#include <math.h>
+#include <inttypes.h>
 
 #define CAN_2515
 // Set SPI CS Pin according to your hardware
@@ -22,12 +24,27 @@ mcp2515_can CAN(SPI_CS_PIN); // Set CS pin
 
 SHA256 sha256;
 byte buffer[128];
-const char *key = "Flightcase2025";
+const String hashMode = "HMAC";
+
+// HMAC SHA256 Test Key
+const char *key = "TestKey2025!";
+// Public Key for Diffie-Hellman
+const int dhPublicKey = 37;
+const int dhRoot = 5;       
+const int dhPrivateKey = 13;
+int dhGenKey = -1;
+int keyToSend = -1;
 
 const int LED = 8;
 boolean ledON = 1;
 
-const String hashMode = "HMAC";
+uint64_t intPow(int a, int b) {
+  uint64_t result = a;
+  for (int i = 0; i < b-1; i++) {
+    result *= a;
+  }
+  return result;
+}
 
 void printHex(int num, int precision) {
   char tmp[16];
@@ -136,6 +153,20 @@ void my_sha256(Hash *hash, String data)
   print_hash(result, HASH_SIZE);
 }
 
+void genDiffieHelmmanKey() {
+  uint32_t key = (intPow(dhRoot, dhPrivateKey) % dhPublicKey);
+  keyToSend = key;
+  Serial.print("ECU Key: ");
+  Serial.println(key);
+}
+
+void processDiffieHellmanKey(int key) {
+  uint32_t generatedKey = (intPow(key, dhPrivateKey) % dhPublicKey);
+  dhGenKey = generatedKey;
+  Serial.print("Arduino Generated Key: ");
+  Serial.println(generatedKey);
+}
+
 void setup() {
   // Default Config is 8 data bits, No Parity bits, 1 Stop bit (8N1)
   Serial.begin(250000);
@@ -154,9 +185,25 @@ void setup() {
 void loop() {
   uint8_t len = 0;
   uint8_t buf[8];
+  int incomingKey = 0;
 
+  // Keep going until we have received a key and are ready to send signals
+  if(dhGenKey < 0) {
+    // Generate and send the key
+    genDiffieHelmmanKey();
+    // Listen for key from Android
+    if (Serial.available() > 0) {
+      // read the incoming byte:
+      incomingKey = Serial.read();
+      // Serial.print("Arduino Incoming Key: ");
+      // Serial.println(incomingKey, DEC);
+      if(incomingKey > 0 && incomingKey != keyToSend) {
+        processDiffieHellmanKey(incomingKey);
+      }
+    }
+  }
 
-  if (CAN_MSGAVAIL == CAN.checkReceive()) { // check if data coming
+  if (CAN_MSGAVAIL == CAN.checkReceive() && dhGenKey >= 0) { // check if data coming
     CAN.readMsgBuf(&len, buf);              // read data,  len: data length, buf: data buf
     unsigned long canId = CAN.getCanId();
 
@@ -169,6 +216,8 @@ void loop() {
     if(hashMode == "SHA256") {
       my_sha256(&sha256, converted);
     } else if (hashMode == "HMAC") {
+      // Use the key generated via Diffie-Hellman
+      const char* key = String(dhGenKey).c_str();
       my_sha256_HMAC(&sha256, key, converted);
     } else {
       Serial.println("ARDUINO INVALID HASH MODE!!!");
